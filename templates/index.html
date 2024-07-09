@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Autism Detection</title>
+    <!-- Include Plotly.js for plotting graphs -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <h1>Autism Detection using Facial Features</h1>
+    <video id="video" width="640" height="480" autoplay></video>
+    <button id="capture">Capture Photo</button>
+    <canvas id="canvas" width="640" height="480" style="display: none;"></canvas>
+    <div id="graph" style="width: 600px; height: 400px;"></div>
+    <p id="result"></p>
+
+    <h2>Upload an Image</h2>
+    <form id="uploadForm" enctype="multipart/form-data">
+        <input type="file" id="fileInput" name="file" accept="image/*">
+        <button type="submit">Upload Photo</button>
+    </form>
+
+    <script>
+        // Access the camera
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const context = canvas.getContext('2d');
+        const captureButton = document.getElementById('capture');
+        const resultText = document.getElementById('result');
+        const uploadForm = document.getElementById('uploadForm');
+        const fileInput = document.getElementById('fileInput');
+        const graphDiv = document.getElementById('graph');
+
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+            });
+
+        captureButton.addEventListener('click', () => {
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const dataURL = canvas.toDataURL('image/jpeg');
+            const base64Data = dataURL.split(',')[1];
+
+            fetch('/predict', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ image: base64Data }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                resultText.textContent = `Result: ${data.result['Neural Network'].result}`;
+                plotGraph(data);
+            })
+            .catch(error => console.error('Error:', error));
+        });
+
+        uploadForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(data => {
+                resultText.textContent = `Result: ${data.result['Neural Network'].result}`;
+                plotGraph(data);
+            })
+            .catch(error => console.error('Error:', error));
+        });
+
+        function plotGraph(data) {
+            const labels = Object.keys(data.result);
+            const accuracies = labels.map(label => data.result[label].accuracy);
+
+            const trace = {
+                x: labels,
+                y: accuracies,
+                type: 'bar'
+            };
+
+            const layout = {
+                title: 'Model Accuracies',
+                yaxis: {
+                    title: 'Accuracy (%)',
+                    range: [0, 100]  // Ensure y-axis range is from 0 to 100
+                }
+            };
+
+            Plotly.newPlot(graphDiv, [trace], layout);
+        }
+    </script>
+</body>
+</html>
